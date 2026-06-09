@@ -1,0 +1,27 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Build outputs
+dist/
+tmp/
+out/
+build/
+.cache/
+
+# Local configuration files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Firebase / Service Accounts
+service-account.json
+articles_dry_run.json
+.firebase/
+.firebaserc
+
+# OS files
+.DS_Store
+Thumbs.db
