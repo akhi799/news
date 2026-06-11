@@ -7,6 +7,31 @@ service cloud.firestore {
     match /articles/{document} {
       allow read: if true;
       allow write: if false;
+
+      // Comments subcollection: Anyone can read or write comments
+      match /comments/{comment} {
+        allow read, write: if true;
+      }
+    }
+
+    // Stats collection: Anyone can read or update counters
+    match /stats/{document} {
+      allow read, write: if true;
+    }
+
+    // Visitor locations collection: Anyone can read or register their location coordinates
+    match /visitor_locations/{document} {
+      allow read, write: if true;
+    }
+
+    // User telemetry collection: Anyone can read or register interest telemetry
+    match /user_telemetry/{document} {
+      allow read, write: if true;
+    }
+
+    // Suggestions collection: Anyone can read or submit suggestions
+    match /suggestions/{document} {
+      allow read, write: if true;
     }
   }
 }

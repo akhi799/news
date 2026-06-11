@@ -9,6 +9,7 @@ export const mockArticles = [
     readingTime: 3,
     sourceName: "Wired",
     sourceUrl: "https://example.com/wired/ai-energy-grid",
+    imageUrl: "https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&w=800&q=80",
     originalTitle: "AI power grid trial shows massive 30 percent reduction in transmission losses",
     scrapedAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
     publishedAtDate: new Date(Date.now() - 7200000).toISOString()
@@ -23,6 +24,7 @@ export const mockArticles = [
     readingTime: 4,
     sourceName: "TechCrunch",
     sourceUrl: "https://example.com/techcrunch/web-summit-decentralized",
+    imageUrl: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=800&q=80",
     originalTitle: "Decentralized web takes center stage at London tech conference",
     scrapedAt: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
     publishedAtDate: new Date(Date.now() - 14400000).toISOString()
@@ -37,6 +39,7 @@ export const mockArticles = [
     readingTime: 3,
     sourceName: "ScienceDaily",
     sourceUrl: "https://example.com/sciencedaily/glass-octopus-genome",
+    imageUrl: "https://images.unsplash.com/photo-1545671913-b89ac1b4ac10?auto=format&fit=crop&w=800&q=80",
     originalTitle: "Deep-sea glass octopus genome sequenced, revealing novel bioluminescent pathway",
     scrapedAt: new Date(Date.now() - 10800000).toISOString(), // 3 hours ago
     publishedAtDate: new Date(Date.now() - 21600000).toISOString()
@@ -51,6 +54,7 @@ export const mockArticles = [
     readingTime: 3,
     sourceName: "NYT Business",
     sourceUrl: "https://example.com/nyt/market-downturn-rates",
+    imageUrl: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=800&q=80",
     originalTitle: "Stocks slide after Federal Reserve officials suggest rates will remain higher for longer",
     scrapedAt: new Date(Date.now() - 14400000).toISOString(), // 4 hours ago
     publishedAtDate: new Date(Date.now() - 28800000).toISOString()
