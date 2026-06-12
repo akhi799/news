@@ -162,7 +162,7 @@ function extractOgImage(html) {
 async function fetchGoogleTrends() {
   console.log("📡 Fetching Google Daily Trends RSS...");
   try {
-    const feed = await parser.parseURL('https://trends.google.com/trends/trendingsearches/daily/rss?geo=IN');
+    const feed = await parser.parseURL('https://trends.google.com/trending/rss?geo=IN');
     const keywords = [];
     feed.items.forEach(item => {
       if (item.title) {
