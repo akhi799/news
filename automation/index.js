@@ -424,8 +424,8 @@ async function isArticleProcessed(url) {
   }
 }
 
-// Call Gemini to process and rewrite the article
-async function processArticleWithAI(title, originalContent, defaultCategory) {
+// Call Gemini to process and rewrite the article (uses model fallback & purpose-specific selection)
+async function processArticleWithAI(title, originalContent, defaultCategory, isTrending = false) {
   if (!ai) {
     // Simulated AI response for testing when API key is missing
     console.log(`🤖 [Simulated AI] Rewriting: "${title}"`);
@@ -463,41 +463,73 @@ async function processArticleWithAI(title, originalContent, defaultCategory) {
     7. Search the web for a relevant, publicly accessible news video report, broadcast, or social media post (from YouTube, Twitter/X, Instagram, or TikTok) that covers this news event. Provide its direct URL, identify its platform, and if it is a YouTube video, extract the video ID and construct the correct embed URL (e.g., https://www.youtube.com/embed/VIDEO_ID). If no relevant video exists, set platform to 'none' and other video fields to empty strings.
   `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'OBJECT',
-          properties: {
-            title: { type: 'STRING', description: 'Catchy, rewritten headline' },
-            summary: { type: 'STRING', description: '1-2 sentence summary' },
-            content: { type: 'STRING', description: 'Fully rewritten news article body' },
-            category: { type: 'STRING', enum: CATEGORIES, description: 'Category matching one of the allowed categories' },
-            sentiment: { type: 'STRING', enum: ['positive', 'neutral', 'negative'], description: 'Overall article sentiment' },
-            readingTime: { type: 'INTEGER', description: 'Estimated read time in minutes' },
-            video: {
-              type: 'OBJECT',
-              properties: {
-                url: { type: 'STRING', description: 'URL of a relevant news video on YouTube, Twitter, Instagram, or TikTok. Return empty string if none found.' },
-                platform: { type: 'STRING', enum: ['youtube', 'twitter', 'instagram', 'tiktok', 'none'], description: 'Platform hosting the video' },
-                embedUrl: { type: 'STRING', description: 'Clean embed URL for iframe if platform is youtube (e.g. https://www.youtube.com/embed/VIDEO_ID) or if available. Return empty string if not applicable.' }
-              },
-              required: ['url', 'platform', 'embedUrl']
-            }
-          },
-          required: ['title', 'summary', 'content', 'category', 'sentiment', 'readingTime', 'video']
-        }
+  const responseSchema = {
+    type: 'OBJECT',
+    properties: {
+      title: { type: 'STRING', description: 'Catchy, rewritten headline' },
+      summary: { type: 'STRING', description: '1-2 sentence summary' },
+      content: { type: 'STRING', description: 'Fully rewritten news article body' },
+      category: { type: 'STRING', enum: CATEGORIES, description: 'Category matching one of the allowed categories' },
+      sentiment: { type: 'STRING', enum: ['positive', 'neutral', 'negative'], description: 'Overall article sentiment' },
+      readingTime: { type: 'INTEGER', description: 'Estimated read time in minutes' },
+      video: {
+        type: 'OBJECT',
+        properties: {
+          url: { type: 'STRING', description: 'URL of a relevant news video on YouTube, Twitter, Instagram, or TikTok. Return empty string if none found.' },
+          platform: { type: 'STRING', enum: ['youtube', 'twitter', 'instagram', 'tiktok', 'none'], description: 'Platform hosting the video' },
+          embedUrl: { type: 'STRING', description: 'Clean embed URL for iframe if platform is youtube (e.g. https://www.youtube.com/embed/VIDEO_ID) or if available. Return empty string if not applicable.' }
+        },
+        required: ['url', 'platform', 'embedUrl']
       }
-    });
+    },
+    required: ['title', 'summary', 'content', 'category', 'sentiment', 'readingTime', 'video']
+  };
 
-    return JSON.parse(response.text);
-  } catch (error) {
-    console.error(`❌ Gemini API Error: ${error.message}`);
-    throw error;
+  // Define models by priority and capacity
+  // 1.5-flash has 1,500 RPD (Requests Per Day). 1.5-pro has 50 RPD but better reasoning. 2.5-flash is newer preview.
+  const trendingModels = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.5-flash'];
+  const standardModels = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'];
+
+  const modelsToTry = isTrending ? trendingModels : standardModels;
+  let lastError = null;
+  let responseText = "";
+
+  for (const modelName of modelsToTry) {
+    try {
+      console.log(`   [AI Model] Querying model: ${modelName} (Trending: ${isTrending})...`);
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: responseSchema
+        }
+      });
+      
+      responseText = response.text;
+      lastError = null; // Reset error on success
+      break;
+    } catch (err) {
+      lastError = err;
+      const errStr = err.message || "";
+      const isQuotaError = errStr.includes('429') || errStr.toLowerCase().includes('quota') || errStr.includes('RESOURCE_EXHAUSTED');
+      
+      if (isQuotaError) {
+        console.warn(`   ⚠️ Model ${modelName} hit quota limit. Retrying with next available model...`);
+        // Wait a short bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        continue;
+      }
+      throw err; // Throw other critical API or validation errors immediately
+    }
   }
+
+  if (lastError) {
+    console.error(`❌ All models failed to process article: ${lastError.message}`);
+    throw lastError;
+  }
+
+  return JSON.parse(responseText);
 }
 
 // Save article to Firestore or dry-run file
@@ -680,7 +712,8 @@ async function run() {
       const processed = await processArticleWithAI(
         candidate.originalTitle,
         articleText,
-        candidate.defaultCategory
+        candidate.defaultCategory,
+        candidate.isTrending
       );
       
       // 4. Save to Firestore (or local file)
