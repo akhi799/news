@@ -489,8 +489,7 @@ async function processArticleWithAI(title, originalContent, defaultCategory) {
             }
           },
           required: ['title', 'summary', 'content', 'category', 'sentiment', 'readingTime', 'video']
-        },
-        tools: [{ googleSearch: {} }]
+        }
       }
     });
 
@@ -704,8 +703,8 @@ async function run() {
       
       await saveArticle(articleObject);
       
-      // Wait a bit to avoid hitting rate limits too quickly
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait a bit to avoid hitting rate limits too quickly (free tier limit: 5 requests per minute, so 12.5s delay)
+      await new Promise(resolve => setTimeout(resolve, 12500));
       
     } catch (error) {
       console.error(`❌ Failed to process article "${candidate.originalTitle}": ${error.message}`);
