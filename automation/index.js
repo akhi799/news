@@ -486,9 +486,21 @@ async function processArticleWithAI(title, originalContent, defaultCategory, isT
   };
 
   // Define models by priority and capacity
-  // 1.5-flash has 1,500 RPD (Requests Per Day). 1.5-pro has 50 RPD but better reasoning. 2.5-flash is newer preview.
-  const trendingModels = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.5-flash'];
-  const standardModels = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'];
+  // 2.5-flash and 3.5-flash are newer stable models. 1.5 versions are kept as fallbacks.
+  const trendingModels = [
+    'gemini-2.5-pro',
+    'gemini-2.5-flash',
+    'gemini-3.5-flash',
+    'gemini-1.5-pro',
+    'gemini-1.5-flash'
+  ];
+  const standardModels = [
+    'gemini-2.5-flash',
+    'gemini-3.5-flash',
+    'gemini-2.5-pro',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro'
+  ];
 
   const modelsToTry = isTrending ? trendingModels : standardModels;
   let lastError = null;
@@ -514,13 +526,17 @@ async function processArticleWithAI(title, originalContent, defaultCategory, isT
       const errStr = err.message || "";
       const isQuotaError = errStr.includes('429') || errStr.toLowerCase().includes('quota') || errStr.includes('RESOURCE_EXHAUSTED');
       
+      console.warn(`   ⚠️ Model ${modelName} failed to generate content: ${errStr}`);
+      
       if (isQuotaError) {
         console.warn(`   ⚠️ Model ${modelName} hit quota limit. Retrying with next available model...`);
         // Wait a short bit before retrying
         await new Promise(resolve => setTimeout(resolve, 1500));
-        continue;
+      } else {
+        // Wait a small delay for other non-quota errors (like 404, etc.)
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
-      throw err; // Throw other critical API or validation errors immediately
+      continue;
     }
   }
 
@@ -560,6 +576,18 @@ async function saveArticle(article) {
 async function run() {
   console.log("⚡ Starting news monitoring job...");
   console.log(`📅 Current local time: ${new Date().toISOString()}`);
+  
+  // Query and log supported models from API key for easier remote debugging
+  if (ai) {
+    try {
+      const modelsResponse = await ai.models.list();
+      const modelList = Array.isArray(modelsResponse) ? modelsResponse : (modelsResponse.models || []);
+      const modelNames = modelList.map(m => m.name.replace('models/', ''));
+      console.log(`📡 Supported models from Gemini API Key: ${modelNames.join(', ')}`);
+    } catch (err) {
+      console.warn(`⚠️ Could not query supported models list: ${err.message}`);
+    }
+  }
   
   // Load recent articles for title similarity check (deduplication)
   const recentArticles = [];
@@ -687,8 +715,19 @@ async function run() {
       // 1. Fetch full page HTML
       const response = await axios.get(candidate.sourceUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'Sec-Ch-Ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+          'Sec-Ch-Ua-Mobile': '?0',
+          'Sec-Ch-Ua-Platform': '"Windows"',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Sec-Fetch-User': '?1',
+          'Upgrade-Insecure-Requests': '1'
         },
         timeout: 10000
       });
