@@ -55,7 +55,20 @@ function App() {
   const [userIp, setUserIp] = useState('local-user');
 
   // Website analytics stats (Page Views & Unique Visitors)
-  const [stats, setStats] = useState({ pageViews: 0, uniqueVisitors: 0 });
+  const [stats, setStats] = useState(() => {
+    try {
+      const cachedViews = parseInt(localStorage.getItem('cached_page_views'));
+      const cachedVisitors = parseInt(localStorage.getItem('cached_unique_visitors'));
+      if (!isNaN(cachedViews) && !isNaN(cachedVisitors)) {
+        return { pageViews: cachedViews, uniqueVisitors: cachedVisitors };
+      }
+    } catch (e) {
+      console.warn("Could not load cached stats:", e);
+    }
+    return { pageViews: 0, uniqueVisitors: 0 };
+  });
+
+  const [loadingStats, setLoadingStats] = useState(true);
 
   // Visitor Coordinates list for Leaflet Map
   const [visitorLocations, setVisitorLocations] = useState([]);
@@ -268,11 +281,15 @@ function App() {
             localStorage.setItem(`demo_visited_${clientIp}`, 'true');
           }
           
-          setStats({
-            pageViews: views + 1,
-            uniqueVisitors: isUnique ? visitors + 1 : visitors
-          });
-        } catch {}
+          const finalViews = views + 1;
+          const finalVisitors = isUnique ? visitors + 1 : visitors;
+          localStorage.setItem('cached_page_views', finalViews.toString());
+          localStorage.setItem('cached_unique_visitors', finalVisitors.toString());
+          setStats({ pageViews: finalViews, uniqueVisitors: finalVisitors });
+          setLoadingStats(false);
+        } catch {
+          setLoadingStats(false);
+        }
       } else {
         try {
           const statsRef = doc(db, 'stats', 'counters');
@@ -287,11 +304,19 @@ function App() {
           onSnapshot(statsRef, (docSnap) => {
             if (docSnap.exists()) {
               const data = docSnap.data();
-              setStats({
-                pageViews: data.total_page_views || 0,
-                uniqueVisitors: data.unique_visitors || 0
-              });
+              const pageViews = data.total_page_views || 0;
+              const uniqueVisitors = data.unique_visitors || 0;
+              
+              localStorage.setItem('cached_page_views', pageViews.toString());
+              localStorage.setItem('cached_unique_visitors', uniqueVisitors.toString());
+              setStats({ pageViews, uniqueVisitors });
+              setLoadingStats(false);
+            } else {
+              setLoadingStats(false);
             }
+          }, (err) => {
+            console.error("Firestore onSnapshot error:", err);
+            setLoadingStats(false);
           });
 
           if (clientIp !== 'local-user') {
@@ -330,12 +355,15 @@ function App() {
               localStorage.setItem(`demo_visited_${clientIp}`, 'true');
             }
             
-            setStats({
-              pageViews: views + 1,
-              uniqueVisitors: isUnique ? visitors + 1 : visitors
-            });
+            const finalViews = views + 1;
+            const finalVisitors = isUnique ? visitors + 1 : visitors;
+            localStorage.setItem('cached_page_views', finalViews.toString());
+            localStorage.setItem('cached_unique_visitors', finalVisitors.toString());
+            setStats({ pageViews: finalViews, uniqueVisitors: finalVisitors });
+            setLoadingStats(false);
           } catch (err) {
             console.error("Failed to run local storage telemetry fallback:", err);
+            setLoadingStats(false);
           }
         }
       }
@@ -1576,12 +1604,16 @@ function App() {
             {/* Visitor Telemetry Counters */}
             <div className="footer-stats-container">
               <div className="footer-stat-box">
-                <span className="stat-value">{stats.uniqueVisitors.toLocaleString()}</span>
+                <span className="stat-value">
+                  {loadingStats && stats.uniqueVisitors === 0 ? "..." : stats.uniqueVisitors.toLocaleString()}
+                </span>
                 <span className="stat-label">Unique Visitors</span>
               </div>
               <div className="footer-stat-box-divider"></div>
               <div className="footer-stat-box">
-                <span className="stat-value">{stats.pageViews.toLocaleString()}</span>
+                <span className="stat-value">
+                  {loadingStats && stats.pageViews === 0 ? "..." : stats.pageViews.toLocaleString()}
+                </span>
                 <span className="stat-label">Total Page Hits</span>
               </div>
             </div>
