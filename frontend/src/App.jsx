@@ -226,12 +226,21 @@ function App() {
       let geoData = null;
 
       try {
-        const ipResponse = await fetch('https://ipapi.co/json/');
+        const ipResponse = await fetch('https://ip-api.com/json/');
         if (ipResponse.ok) {
-          geoData = await ipResponse.json();
-          if (geoData && geoData.ip) {
-            clientIp = geoData.ip;
+          const rawGeo = await ipResponse.json();
+          if (rawGeo && rawGeo.status === 'success') {
+            clientIp = rawGeo.query;
             setUserIp(clientIp);
+            geoData = {
+              ip: rawGeo.query,
+              city: rawGeo.city,
+              country_name: rawGeo.country,
+              country: rawGeo.countryCode,
+              latitude: rawGeo.lat,
+              longitude: rawGeo.lon,
+              region_code: rawGeo.region
+            };
           }
         }
       } catch (error) {
