@@ -786,6 +786,42 @@ function App() {
         }
         ogImg.setAttribute('content', selectedArticle.imageUrl);
       }
+
+      // Dynamic JSON-LD Structured Data for NewsArticle Schema
+      let jsonLdScript = document.getElementById('ads-article-schema');
+      if (!jsonLdScript) {
+        jsonLdScript = document.createElement('script');
+        jsonLdScript.id = 'ads-article-schema';
+        jsonLdScript.type = 'application/ld+json';
+        document.head.appendChild(jsonLdScript);
+      }
+
+      const schema = {
+        "@context": "https://schema.org",
+        "@type": "NewsArticle",
+        "headline": selectedArticle.title,
+        "image": [
+          selectedArticle.imageUrl || "https://news-b5c94.web.app/default-image.png"
+        ],
+        "datePublished": selectedArticle.publishedAtDate || selectedArticle.scrapedAt,
+        "dateModified": selectedArticle.scrapedAt,
+        "author": [{
+          "@type": "Person",
+          "name": "Gemini AI News Editor",
+          "url": "https://news-b5c94.web.app"
+        }],
+        "publisher": {
+          "@type": "Organization",
+          "name": "PulseAI",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://news-b5c94.web.app/logo.png"
+          }
+        },
+        "description": selectedArticle.summary,
+        "articleBody": selectedArticle.content
+      };
+      jsonLdScript.text = JSON.stringify(schema);
     } else {
       if (window.location.hash && window.location.hash.startsWith('#article-')) {
         window.location.hash = '';
@@ -795,6 +831,12 @@ function App() {
       const metaDesc = document.querySelector('meta[name="description"]');
       if (metaDesc) {
         metaDesc.setAttribute('content', "An automated independent news website gathering stories hourly, summarized and rewritten using Google Gemini AI.");
+      }
+
+      // Remove structured schema on close
+      const jsonLdScript = document.getElementById('ads-article-schema');
+      if (jsonLdScript) {
+        jsonLdScript.remove();
       }
     }
   }, [selectedArticle]);
