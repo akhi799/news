@@ -1,5 +1,6 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getAnalytics } from "firebase/analytics";
 
 // TODO: Replace these placeholders with your actual Firebase project configuration from the Firebase Console.
 // Instructions on how to get this are in the project's README.md.
@@ -15,6 +16,7 @@ const firebaseConfig = {
 };
 
 let db = null;
+let analytics = null;
 let isDemoMode = true;
 
 // Check if config has been customized by the user
@@ -24,14 +26,17 @@ if (isConfigValid) {
   try {
     const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
     db = getFirestore(app);
+    if (typeof window !== "undefined") {
+      analytics = getAnalytics(app);
+    }
     isDemoMode = false;
-    console.log("🔥 Connected to live Firebase Firestore.");
+    console.log("🔥 Connected to live Firebase Firestore & Analytics.");
   } catch (error) {
-    console.error("❌ Failed to initialize Firebase Firestore:", error);
+    console.error("❌ Failed to initialize Firebase Firestore & Analytics:", error);
   }
 } else {
   console.log("💡 PulseAI is currently running in Demo Mode. Configure 'firebaseConfig' in 'src/firebase.js' to connect your own database.");
 }
 
-export { db, isDemoMode };
+export { db, analytics, isDemoMode };
 export default db;

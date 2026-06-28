@@ -19,10 +19,13 @@ import {
   Pause,
   Square,
   Lightbulb,
-  ThumbsUp
+  ThumbsUp,
+  Video,
+  Eye,
+  Flame
 } from 'lucide-react';
 import { collection, query, orderBy, limit, onSnapshot, doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
-import { db, isDemoMode } from './firebase';
+import { db, analytics, isDemoMode } from './firebase';
 import { mockArticles } from './mockData';
 import { CATEGORIES } from '../../automation/config';
 
@@ -160,7 +163,7 @@ function App() {
 
       // Check if it's a valid horizontal swipe (threshold 65px, fast enough, and horizontal-first)
       if (duration < 450 && Math.abs(deltaX) > 65 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4) {
-        const categoriesOrder = ['All', 'Recommended', ...CATEGORIES, 'Bookmarks', 'Suggestions'];
+        const categoriesOrder = ['All', 'Recommended', ...CATEGORIES, 'Videos', 'Bookmarks', 'Suggestions'];
         const currentIndex = categoriesOrder.indexOf(selectedCategory);
         if (currentIndex === -1) return;
 
@@ -754,6 +757,20 @@ function App() {
         window.location.hash = `article-${selectedArticle.id}`;
       }
 
+      // Increment Firestore view count dynamically
+      if (!isDemoMode && selectedArticle.id) {
+        try {
+          const articleRef = doc(db, 'articles', selectedArticle.id);
+          updateDoc(articleRef, { views: increment(1) }).catch(err => {
+            console.warn("Failed to increment article views:", err.message);
+          });
+        } catch (err) {
+          console.warn("Firestore views increment error:", err.message);
+        }
+      } else if (isDemoMode) {
+        selectedArticle.views = (selectedArticle.views || 0) + 1;
+      }
+
       document.title = `${selectedArticle.title} | PulseAI News`;
       
       const metaDesc = document.querySelector('meta[name="description"]');
@@ -1002,11 +1019,12 @@ function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Filter Logic (supports Bookmarks and Recommended tabs)
+  // Filter Logic (supports Bookmarks, Recommended, and Videos tabs)
   const filteredArticles = articles.filter(article => {
     const matchesCategory = 
       (selectedCategory === 'All' || selectedCategory === 'Recommended') ? true : 
       selectedCategory === 'Bookmarks' ? bookmarks.includes(article.id) : 
+      selectedCategory === 'Videos' ? (article.video && article.video.url && article.video.platform && article.video.platform !== 'none') :
       article.category === selectedCategory;
       
     const matchesSearch = 
@@ -1178,6 +1196,14 @@ function App() {
           Saved Stories
         </button>
         <button 
+          className={`category-tab videos-tab ${selectedCategory === 'Videos' ? 'active' : ''}`}
+          onClick={() => setSelectedCategory('Videos')}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+        >
+          <Video size={14} />
+          Videos
+        </button>
+        <button 
           className={`category-tab suggestions-tab ${selectedCategory === 'Suggestions' ? 'active' : ''}`}
           onClick={() => setSelectedCategory('Suggestions')}
           style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
@@ -1195,6 +1221,7 @@ function App() {
              selectedCategory === 'Bookmarks' ? 'Your Saved Stories' : 
              selectedCategory === 'Recommended' ? 'Recommended for You' : 
              selectedCategory === 'Suggestions' ? 'Community Feedback & Ideas' :
+             selectedCategory === 'Videos' ? 'Trending Video News' :
              selectedCategory}
           </h1>
           <div className="update-indicator">
@@ -1285,155 +1312,280 @@ function App() {
               </div>
             </div>
           </div>
-        ) : loading ? (
-          <div className="news-grid">
-            {[...Array(6)].map((_, idx) => (
-              <div key={`skeleton-${idx}`} className="news-card skeleton-card">
-                <div className="skeleton-line skeleton-image"></div>
-                <div className="skeleton-content-wrapper">
-                  <div className="skeleton-line skeleton-header"></div>
-                  <div className="skeleton-line skeleton-title-long"></div>
-                  <div className="skeleton-line skeleton-title-short"></div>
-                  <div className="skeleton-line skeleton-body-1"></div>
-                  <div className="skeleton-line skeleton-body-2"></div>
-                  <div className="skeleton-line skeleton-footer"></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : filteredArticles.length === 0 ? (
-          <div className="empty-state">
-            <AlertTriangle className="empty-icon" size={48} />
-            <h3 style={{ marginBottom: '8px', fontFamily: 'var(--font-editorial)', fontSize: '1.5rem' }}>
-              {selectedCategory === 'Bookmarks' ? 'No saved stories yet' : 'No articles match your search'}
-            </h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-              {selectedCategory === 'Bookmarks' ? 'Bookmark articles by clicking the bookmark icon on any card to read them later.' : 'Try looking for a different keyword or selecting another category.'}
-            </p>
-          </div>
         ) : (
-          <>
-            {/* 5a. Featured Hero Card */}
-            {showHero && heroArticle && (
-              <div className="news-hero-card" onClick={() => handleArticleClick(heroArticle)}>
-                {heroArticle.imageUrl && (
-                  <div className="hero-image-wrapper">
-                    <img src={heroArticle.imageUrl} alt={heroArticle.title} className="hero-image" />
-                    <div className="hero-image-overlay"></div>
+          <div className="feed-layout-container">
+            <div className="feed-left-column">
+              {selectedCategory === 'Videos' ? (
+                // 5c. Specialized Video Grid
+                loading ? (
+                  <div className="video-news-grid">
+                    {[...Array(6)].map((_, idx) => (
+                      <div key={`video-skel-${idx}`} className="video-card skeleton-card" style={{ height: '360px' }}>
+                        <div className="skeleton-line skeleton-image" style={{ height: '180px' }}></div>
+                        <div className="skeleton-content-wrapper">
+                          <div className="skeleton-line skeleton-title-long"></div>
+                          <div className="skeleton-line skeleton-body-1"></div>
+                          <div className="skeleton-line skeleton-footer"></div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                )}
-                <div className="hero-content">
-                  <div className="card-header-info">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span className="card-category">{heroArticle.category}</span>
-                      {heroArticle.isTrending && (
-                        <span className="trending-badge">
-                          🔥 Trending
-                        </span>
-                      )}
-                      <span className={`card-sentiment-badge ${heroArticle.sentiment || 'neutral'}`}>
-                        <span className="sentiment-dot" style={{ backgroundColor: getSentimentDotColor(heroArticle.sentiment) }}></span>
-                        {heroArticle.sentiment || 'neutral'}
-                      </span>
-                    </div>
-                    <button 
-                      className={`bookmark-card-btn ${bookmarks.includes(heroArticle.id) ? 'bookmarked' : ''}`} 
-                      onClick={(e) => toggleBookmark(heroArticle.id, e)}
-                      title="Save story"
-                    >
-                      <Bookmark size={14} style={{ fill: bookmarks.includes(heroArticle.id) ? 'currentColor' : 'none' }} />
-                    </button>
+                ) : filteredArticles.length === 0 ? (
+                  <div className="empty-state">
+                    <Video className="empty-icon" size={48} />
+                    <h3 style={{ marginBottom: '8px', fontFamily: 'var(--font-editorial)', fontSize: '1.5rem' }}>No videos available</h3>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>We couldn\'t find any articles with embedded news videos right now. Check back later!</p>
                   </div>
-                  
-                  <h1 className="hero-title">{heroArticle.title}</h1>
-                  <p className="hero-summary">{heroArticle.summary}</p>
-                  
-                  <div className="hero-footer">
-                    <div className="card-metadata">
-                      <span className="card-meta-item">{heroArticle.sourceName}</span>
-                      <span>•</span>
-                      <span className="card-meta-item">{formatArticleDate(heroArticle.scrapedAt || heroArticle.publishedAt)}</span>
-                    </div>
-                    
-                    <span className="read-more-link">
-                      Featured Story <ArrowRight size={14} />
-                    </span>
+                ) : (
+                  <div className="video-news-grid">
+                    {sortedArticles.map((article) => (
+                      <div key={article.id} className="video-card">
+                        {article.video && article.video.platform === 'youtube' && article.video.embedUrl ? (
+                          <div className="video-card-player">
+                            <iframe
+                              src={article.video.embedUrl}
+                              title={article.title}
+                              frameBorder="0"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                              className="video-iframe"
+                            ></iframe>
+                          </div>
+                        ) : (
+                          <div className="video-card-placeholder" onClick={() => handleArticleClick(article)}>
+                            <img src={article.imageUrl || 'https://news-b5c94.web.app/default-image.png'} alt={article.title} className="video-placeholder-img" />
+                            <div className="video-play-overlay">
+                              <Play size={24} style={{ fill: 'currentColor' }} />
+                              <span>Watch on {article.video?.platform || 'Social Media'}</span>
+                            </div>
+                          </div>
+                        )}
+                        <div className="video-card-content">
+                          <span className="video-card-category">{article.category}</span>
+                          <h3 className="video-card-title" onClick={() => handleArticleClick(article)}>{article.title}</h3>
+                          <p className="video-card-summary">{article.summary}</p>
+                          <div className="video-card-footer">
+                            <span>{article.sourceName}</span>
+                            <span>•</span>
+                            <span>{formatArticleDate(article.scrapedAt || article.publishedAt)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              </div>
-            )}
+                )
+              ) : (
+                // Standard News grid
+                loading ? (
+                  <div className="news-grid">
+                    {[...Array(6)].map((_, idx) => (
+                      <div key={`skeleton-${idx}`} className="news-card skeleton-card">
+                        <div className="skeleton-line skeleton-image"></div>
+                        <div className="skeleton-content-wrapper">
+                          <div className="skeleton-line skeleton-header"></div>
+                          <div className="skeleton-line skeleton-title-long"></div>
+                          <div className="skeleton-line skeleton-title-short"></div>
+                          <div className="skeleton-line skeleton-body-1"></div>
+                          <div className="skeleton-line skeleton-body-2"></div>
+                          <div className="skeleton-line skeleton-footer"></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : filteredArticles.length === 0 ? (
+                  <div className="empty-state">
+                    <AlertTriangle className="empty-icon" size={48} />
+                    <h3 style={{ marginBottom: '8px', fontFamily: 'var(--font-editorial)', fontSize: '1.5rem' }}>
+                      {selectedCategory === 'Bookmarks' ? 'No saved stories yet' : 'No articles match your search'}
+                    </h3>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+                      {selectedCategory === 'Bookmarks' ? 'Bookmark articles by clicking the bookmark icon on any card to read them later.' : 'Try looking for a different keyword or selecting another category.'}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {/* 5a. Featured Hero Card */}
+                    {showHero && heroArticle && (
+                      <div className="news-hero-card" onClick={() => handleArticleClick(heroArticle)}>
+                        {heroArticle.imageUrl && (
+                          <div className="hero-image-wrapper">
+                            <img src={heroArticle.imageUrl} alt={heroArticle.title} className="hero-image" />
+                            <div className="hero-image-overlay"></div>
+                          </div>
+                        )}
+                        <div className="hero-content">
+                          <div className="card-header-info">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span className="card-category">{heroArticle.category}</span>
+                              {heroArticle.isTrending && (
+                                <span className="trending-badge">
+                                  🔥 Trending
+                                </span>
+                              )}
+                              <span className={`card-sentiment-badge ${heroArticle.sentiment || 'neutral'}`}>
+                                <span className="sentiment-dot" style={{ backgroundColor: getSentimentDotColor(heroArticle.sentiment) }}></span>
+                                {heroArticle.sentiment || 'neutral'}
+                              </span>
+                            </div>
+                            <button 
+                              className={`bookmark-card-btn ${bookmarks.includes(heroArticle.id) ? 'bookmarked' : ''}`} 
+                              onClick={(e) => toggleBookmark(heroArticle.id, e)}
+                              title="Save story"
+                            >
+                              <Bookmark size={14} style={{ fill: bookmarks.includes(heroArticle.id) ? 'currentColor' : 'none' }} />
+                            </button>
+                          </div>
+                          
+                          <h1 className="hero-title">{heroArticle.title}</h1>
+                          <p className="hero-summary">{heroArticle.summary}</p>
+                          
+                          <div className="hero-footer">
+                            <div className="card-metadata">
+                              <span className="card-meta-item">{heroArticle.sourceName}</span>
+                              <span>•</span>
+                              <span className="card-meta-item">{formatArticleDate(heroArticle.scrapedAt || heroArticle.publishedAt)}</span>
+                            </div>
+                            
+                            <span className="read-more-link">
+                              Featured Story <ArrowRight size={14} />
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-            {/* 5b. News Grid */}
-            {gridArticles.length > 0 ? (
-              <div className="news-grid">
-                {gridArticles.map((article) => (
-                   <article 
-                     key={article.id} 
-                     className="news-card"
-                     onClick={() => handleArticleClick(article)}
-                   >
-                     {article.imageUrl && (
-                       <div className="card-image-wrapper">
-                         <img src={article.imageUrl} alt={article.title} className="card-image" />
-                         <div className="card-image-overlay"></div>
-                       </div>
-                     )}
-                     
-                     <div className="card-content-wrapper">
-                       <div className="card-header-info">
-                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                           <span className="card-category">{article.category}</span>
-                           {article.isTrending && (
-                             <span className="trending-badge">
-                               🔥
-                             </span>
-                           )}
-                         </div>
-                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                           <span className={`card-sentiment-badge ${article.sentiment || 'neutral'}`}>
-                             <span className="sentiment-dot" style={{ backgroundColor: getSentimentDotColor(article.sentiment) }}></span>
-                             {article.sentiment || 'neutral'}
-                           </span>
-                           <button 
-                             className={`bookmark-card-btn ${bookmarks.includes(article.id) ? 'bookmarked' : ''}`} 
-                             onClick={(e) => toggleBookmark(article.id, e)}
-                             title="Save story"
+                    {/* 5b. News Grid */}
+                    {gridArticles.length > 0 ? (
+                      <div className="news-grid">
+                        {gridArticles.map((article) => (
+                           <article 
+                             key={article.id} 
+                             className="news-card"
+                             onClick={() => handleArticleClick(article)}
                            >
-                             <Bookmark size={12} style={{ fill: bookmarks.includes(article.id) ? 'currentColor' : 'none' }} />
-                           </button>
-                         </div>
-                       </div>
-                       
-                       <h2 className="card-title">{article.title}</h2>
-                       <p className="card-summary">{article.summary}</p>
-                     </div>
-                     
-                     <div className="card-footer">
-                       <div className="card-metadata">
-                         <span className="card-meta-item">
-                           {article.sourceName}
-                         </span>
-                         <span>•</span>
-                         <span className="card-meta-item">
-                           {formatArticleDate(article.scrapedAt || article.publishedAt)}
-                         </span>
-                       </div>
-                       
-                       <span className="read-more-link">
-                         Read <ArrowRight size={14} />
-                       </span>
-                     </div>
-                   </article>
-                ))}
-              </div>
-            ) : (
-              showHero && (
-                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                  No more stories to display.
+                             {article.imageUrl && (
+                               <div className="card-image-wrapper">
+                                 <img src={article.imageUrl} alt={article.title} className="card-image" />
+                                 <div className="card-image-overlay"></div>
+                               </div>
+                             )}
+                             
+                             <div className="card-content-wrapper">
+                               <div className="card-header-info">
+                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                   <span className="card-category">{article.category}</span>
+                                   {article.isTrending && (
+                                     <span className="trending-badge">
+                                       🔥
+                                     </span>
+                                   )}
+                                 </div>
+                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                   <span className={`card-sentiment-badge ${article.sentiment || 'neutral'}`}>
+                                     <span className="sentiment-dot" style={{ backgroundColor: getSentimentDotColor(article.sentiment) }}></span>
+                                     {article.sentiment || 'neutral'}
+                                   </span>
+                                   <button 
+                                     className={`bookmark-card-btn ${bookmarks.includes(article.id) ? 'bookmarked' : ''}`} 
+                                     onClick={(e) => toggleBookmark(article.id, e)}
+                                     title="Save story"
+                                   >
+                                     <Bookmark size={12} style={{ fill: bookmarks.includes(article.id) ? 'currentColor' : 'none' }} />
+                                   </button>
+                                 </div>
+                               </div>
+                               
+                               <h2 className="card-title">{article.title}</h2>
+                               <p className="card-summary">{article.summary}</p>
+                             </div>
+                             
+                             <div className="card-footer">
+                               <div className="card-metadata">
+                                 <span className="card-meta-item">
+                                   {article.sourceName}
+                                 </span>
+                                 <span>•</span>
+                                 <span className="card-meta-item">
+                                   {formatArticleDate(article.scrapedAt || article.publishedAt)}
+                                 </span>
+                               </div>
+                               
+                               {article.views > 0 && (
+                                 <div className="card-views-meta" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--text-muted)', marginRight: 'auto', marginLeft: '12px' }}>
+                                   <Eye size={12} />
+                                   <span>{article.views}</span>
+                                 </div>
+                               )}
+                               
+                               <span className="read-more-link">
+                                 Read <ArrowRight size={14} />
+                               </span>
+                             </div>
+                           </article>
+                        ))}
+                      </div>
+                    ) : (
+                      showHero && (
+                        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                          No more stories to display.
+                        </div>
+                      )
+                    )}
+                  </>
+                )
+              )}
+            </div>
+
+            {/* Sticky Popular Sidebar */}
+            <aside className="feed-right-sidebar">
+              <div className="trending-sidebar-section">
+                <h2 className="trending-sidebar-title">
+                  <Flame size={18} style={{ color: 'var(--accent-secondary)' }} />
+                  Popular Stories
+                </h2>
+                <div className="trending-sidebar-list">
+                  {articles.length === 0 ? (
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No stories loaded.</div>
+                  ) : (
+                    [...articles]
+                      // Sort by view count descending, then fall back to isTrending
+                      .sort((a, b) => {
+                        const viewsA = a.views || 0;
+                        const viewsB = b.views || 0;
+                        if (viewsA !== viewsB) return viewsB - viewsA;
+                        return (b.isTrending ? 1 : 0) - (a.isTrending ? 1 : 0);
+                      })
+                      .slice(0, 5)
+                      .map((art) => (
+                        <div 
+                          key={`side-${art.id}`} 
+                          className="trending-sidebar-item"
+                          onClick={() => handleArticleClick(art)}
+                        >
+                          <img 
+                            src={art.imageUrl || 'https://news-b5c94.web.app/default-image.png'} 
+                            alt={art.title} 
+                            className="trending-sidebar-thumb" 
+                          />
+                          <div className="trending-sidebar-item-content">
+                            <span className="trending-sidebar-item-category">{art.category}</span>
+                            <h3 className="trending-sidebar-item-title">{art.title}</h3>
+                            <div className="trending-sidebar-item-meta">
+                              <span>{art.sourceName}</span>
+                              <span>•</span>
+                              <div className="trending-sidebar-views">
+                                <Eye size={10} />
+                                <span>{art.views || 0}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                  )}
                 </div>
-              )
-            )}
-          </>
+              </div>
+            </aside>
+          </div>
         )}
       </main>
 
