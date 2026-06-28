@@ -7,7 +7,7 @@
     "scraper": "cd automation && node index.js",
     "frontend:dev": "cd frontend && npm run dev",
     "frontend:build": "cd frontend && npm run build",
-    "deploy": "npm run frontend:build && npx firebase deploy --project news-b5c94"
+    "deploy": "node automation/prerender.js && npm run frontend:build && npx firebase deploy --project news-b5c94"
   },
   "devDependencies": {
     "firebase-tools": "^13.12.0"

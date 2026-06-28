@@ -19,18 +19,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
-          cache-dependency-path: automation/package.json
 
-      - name: Install Dependencies
+      - name: Install All Dependencies
         run: |
-          cd automation
           npm ci
+          cd automation && npm ci
+          cd ../frontend && npm ci
 
-      - name: Run Scraper
+      - name: Run Scraper and Deploy Prerendered Site
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
-          cd automation
-          node index.js
+          # 1. Scrape latest news articles
+          npm run scraper
+          
+          # 2. Prerender articles, build client, and deploy hosting to Firebase
+          npm run deploy

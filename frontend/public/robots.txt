@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://news-b5c94.web.app/sitemap.xml
