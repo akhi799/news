@@ -30,9 +30,16 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/service-account-temp.json
         run: |
+          # Write service account JSON to file securely using Node (avoids shell escaping issues)
+          node -e "require('fs').writeFileSync('service-account-temp.json', process.env.FIREBASE_SERVICE_ACCOUNT)"
+          
           # 1. Scrape latest news articles
           npm run scraper
           
           # 2. Prerender articles, build client, and deploy hosting to Firebase
           npm run deploy
+          
+          # Clean up credentials file
+          node -e "require('fs').unlinkSync('service-account-temp.json')"
