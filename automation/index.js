@@ -514,7 +514,8 @@ async function processArticleWithAI(title, originalContent, defaultCategory, isT
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
-          responseSchema: responseSchema
+          responseSchema: responseSchema,
+          tools: [{ googleSearch: {} }]
         }
       });
       

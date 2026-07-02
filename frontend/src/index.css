@@ -2013,3 +2013,10 @@ body {
   color: var(--text-muted);
   font-weight: 500;
 }
+
+/* Pulsing Red Indicator for Live streams */
+@keyframes pulse {
+  0% { transform: scale(0.9); opacity: 0.6; }
+  50% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.6; }
+}

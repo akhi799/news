@@ -29,6 +29,33 @@ import { db, analytics, isDemoMode } from './firebase';
 import { mockArticles } from './mockData';
 import { CATEGORIES } from '../../automation/config';
 
+const LIVE_CHANNELS = [
+  {
+    id: "live-ndtv",
+    name: "NDTV 24x7 India",
+    embedUrl: "https://www.youtube.com/embed/live_stream?channel=UC7CYT_8vK1a89vR4wuzlh1g",
+    category: "LIVE NEWS"
+  },
+  {
+    id: "live-indiatoday",
+    name: "India Today Live",
+    embedUrl: "https://www.youtube.com/embed/live_stream?channel=UC5SbtPv4sU-s0-nnd4h8g2Q",
+    category: "LIVE NEWS"
+  },
+  {
+    id: "live-dw",
+    name: "DW News International",
+    embedUrl: "https://www.youtube.com/embed/live_stream?channel=UCqM72EdJ49pej27n6FB93fA",
+    category: "LIVE NEWS"
+  },
+  {
+    id: "live-reuters",
+    name: "Reuters Live",
+    embedUrl: "https://www.youtube.com/embed/live_stream?channel=UCoMdktPbSTxxrR81EuYC7jg",
+    category: "LIVE NEWS"
+  }
+];
+
 function App() {
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1316,64 +1343,102 @@ function App() {
           <div className="feed-layout-container">
             <div className="feed-left-column">
               {selectedCategory === 'Videos' ? (
-                // 5c. Specialized Video Grid
-                loading ? (
-                  <div className="video-news-grid">
-                    {[...Array(6)].map((_, idx) => (
-                      <div key={`video-skel-${idx}`} className="video-card skeleton-card" style={{ height: '360px' }}>
-                        <div className="skeleton-line skeleton-image" style={{ height: '180px' }}></div>
-                        <div className="skeleton-content-wrapper">
-                          <div className="skeleton-line skeleton-title-long"></div>
-                          <div className="skeleton-line skeleton-body-1"></div>
-                          <div className="skeleton-line skeleton-footer"></div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : filteredArticles.length === 0 ? (
-                  <div className="empty-state">
-                    <Video className="empty-icon" size={48} />
-                    <h3 style={{ marginBottom: '8px', fontFamily: 'var(--font-editorial)', fontSize: '1.5rem' }}>No videos available</h3>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>We couldn\'t find any articles with embedded news videos right now. Check back later!</p>
-                  </div>
-                ) : (
-                  <div className="video-news-grid">
-                    {sortedArticles.map((article) => (
-                      <div key={article.id} className="video-card">
-                        {article.video && article.video.platform === 'youtube' && article.video.embedUrl ? (
+                <>
+                  {/* Live 24/7 News Broadcasts Section */}
+                  <div className="live-broadcasts-section" style={{ marginBottom: '40px' }}>
+                    <h2 className="video-section-subtitle" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--font-editorial)', fontSize: '1.4rem', marginBottom: '16px' }}>
+                      <span className="live-dot" style={{ display: 'inline-block', width: '8px', height: '8px', backgroundColor: '#ef4444', borderRadius: '50%', animation: 'pulse 1.5s infinite' }}></span>
+                      Live 24/7 News Broadcasts
+                    </h2>
+                    <div className="video-news-grid">
+                      {LIVE_CHANNELS.map((channel) => (
+                        <div key={channel.id} className="video-card live-channel-card" style={{ border: '1px solid rgba(239, 68, 68, 0.2)' }}>
                           <div className="video-card-player">
                             <iframe
-                              src={article.video.embedUrl}
-                              title={article.title}
+                              src={channel.embedUrl}
+                              title={channel.name}
                               frameBorder="0"
                               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                               allowFullScreen
                               className="video-iframe"
                             ></iframe>
                           </div>
-                        ) : (
-                          <div className="video-card-placeholder" onClick={() => handleArticleClick(article)}>
-                            <img src={article.imageUrl || 'https://news-b5c94.web.app/default-image.png'} alt={article.title} className="video-placeholder-img" />
-                            <div className="video-play-overlay">
-                              <Play size={24} style={{ fill: 'currentColor' }} />
-                              <span>Watch on {article.video?.platform || 'Social Media'}</span>
-                            </div>
-                          </div>
-                        )}
-                        <div className="video-card-content">
-                          <span className="video-card-category">{article.category}</span>
-                          <h3 className="video-card-title" onClick={() => handleArticleClick(article)}>{article.title}</h3>
-                          <p className="video-card-summary">{article.summary}</p>
-                          <div className="video-card-footer">
-                            <span>{article.sourceName}</span>
-                            <span>•</span>
-                            <span>{formatArticleDate(article.scrapedAt || article.publishedAt)}</span>
+                          <div className="video-card-content" style={{ padding: '12px' }}>
+                            <span className="video-card-category" style={{ color: '#ef4444', fontWeight: 'bold' }}>🔴 {channel.category}</span>
+                            <h3 className="video-card-title" style={{ fontSize: '1rem', margin: '4px 0 0 0' }}>{channel.name}</h3>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                )
+
+                  {/* Individual Video Reports Feed */}
+                  <div className="video-reports-section">
+                    <h2 className="video-section-subtitle" style={{ fontFamily: 'var(--font-editorial)', fontSize: '1.4rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Video size={18} />
+                      Story Coverage Videos
+                    </h2>
+                    {loading ? (
+                      <div className="video-news-grid">
+                        {[...Array(3)].map((_, idx) => (
+                          <div key={`video-skel-${idx}`} className="video-card skeleton-card" style={{ height: '360px' }}>
+                            <div className="skeleton-line skeleton-image" style={{ height: '180px' }}></div>
+                            <div className="skeleton-content-wrapper">
+                              <div className="skeleton-line skeleton-title-long"></div>
+                              <div className="skeleton-line skeleton-body-1"></div>
+                              <div className="skeleton-line skeleton-footer"></div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : filteredArticles.length === 0 ? (
+                      <div className="empty-state" style={{ minHeight: '200px', background: 'var(--bg-card)', border: '1px dashed var(--border-color)', borderRadius: '12px', padding: '30px' }}>
+                        <Sparkles className="empty-icon" size={32} style={{ color: 'var(--accent-primary)' }} />
+                        <h3 style={{ marginBottom: '8px', fontFamily: 'var(--font-editorial)', fontSize: '1.25rem' }}>No direct coverage clips found</h3>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', maxWidth: '400px', margin: '0 auto' }}>
+                          We haven't indexed specific social video feeds for today's bulletins yet. Watch live broadcasts above, or check back later!
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="video-news-grid">
+                        {sortedArticles.map((article) => (
+                          <div key={article.id} className="video-card">
+                            {article.video && article.video.platform === 'youtube' && article.video.embedUrl ? (
+                              <div className="video-card-player">
+                                <iframe
+                                  src={article.video.embedUrl}
+                                  title={article.title}
+                                  frameBorder="0"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                  className="video-iframe"
+                                ></iframe>
+                              </div>
+                            ) : (
+                              <div className="video-card-placeholder" onClick={() => handleArticleClick(article)}>
+                                <img src={article.imageUrl || 'https://news-b5c94.web.app/default-image.png'} alt={article.title} className="video-placeholder-img" />
+                                <div className="video-play-overlay">
+                                  <Play size={24} style={{ fill: 'currentColor' }} />
+                                  <span>Watch on {article.video?.platform || 'Social Media'}</span>
+                                </div>
+                              </div>
+                            )}
+                            <div className="video-card-content">
+                              <span className="video-card-category">{article.category}</span>
+                              <h3 className="video-card-title" onClick={() => handleArticleClick(article)}>{article.title}</h3>
+                              <p className="video-card-summary">{article.summary}</p>
+                              <div className="video-card-footer">
+                                <span>{article.sourceName}</span>
+                                <span>•</span>
+                                <span>{formatArticleDate(article.scrapedAt || article.publishedAt)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
               ) : (
                 // Standard News grid
                 loading ? (
