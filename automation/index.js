@@ -429,6 +429,62 @@ async function isArticleProcessed(url) {
   }
 }
 
+// Search the web for a news video report matching the rewritten headline
+async function findVideoForArticle(title, modelName) {
+  try {
+    console.log(`   [AI Video Search] Searching for news coverage video using model: ${modelName}...`);
+    const prompt = `
+      Search the web for a relevant, publicly accessible news video report, broadcast, or social media post (from YouTube, Twitter/X, Instagram, or TikTok) that covers this news event: "${title}".
+      
+      You must respond with a JSON object. Do not output any other text or markdown codeblocks (like \`\`\`json). Just return a raw JSON string matching this structure exactly:
+      {
+        "url": "direct URL to the video, or empty string if none found",
+        "platform": "youtube" | "twitter" | "instagram" | "tiktok" | "none",
+        "embedUrl": "clean youtube embed URL (e.g. https://www.youtube.com/embed/VIDEO_ID) if platform is youtube, or empty string if not applicable"
+      }
+      
+      If no relevant video report is found, set platform to "none", and url and embedUrl to empty strings.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: prompt,
+      config: {
+        // We do NOT use responseMimeType: 'application/json' here to avoid 400 bad request conflicts with search grounding
+        tools: [{ googleSearch: {} }]
+      }
+    });
+
+    let text = response.text ? response.text.trim() : "";
+    
+    // Clean markdown blocks if the model wrapped it
+    if (text.startsWith("```json")) {
+      text = text.substring(7);
+    } else if (text.startsWith("```")) {
+      text = text.substring(3);
+    }
+    if (text.endsWith("```")) {
+      text = text.substring(0, text.length - 3);
+    }
+    text = text.trim();
+
+    try {
+      const videoObj = JSON.parse(text);
+      return {
+        url: videoObj.url || "",
+        platform: videoObj.platform || "none",
+        embedUrl: videoObj.embedUrl || ""
+      };
+    } catch (parseErr) {
+      console.warn(`   ⚠️ [AI Video Search] JSON parse failed on text: "${text}". Error: ${parseErr.message}`);
+      return { url: "", platform: "none", embedUrl: "" };
+    }
+  } catch (err) {
+    console.warn(`   ⚠️ [AI Video Search] Failed to find video report: ${err.message}`);
+    return { url: "", platform: "none", embedUrl: "" };
+  }
+}
+
 // Call Gemini to process and rewrite the article (uses model fallback & purpose-specific selection)
 async function processArticleWithAI(title, originalContent, defaultCategory, isTrending = false, matchedKeyword = null) {
   if (!ai) {
@@ -477,9 +533,9 @@ async function processArticleWithAI(title, originalContent, defaultCategory, isT
     4. Categorize this article into one of the following categories: ${CATEGORIES.join(', ')}.
     5. Analyze the overall sentiment of the article (positive, neutral, negative).
     6. Estimate the reading time in minutes (assuming 200 words per minute).
-    7. Search the web for a relevant, publicly accessible news video report, broadcast, or social media post (from YouTube, Twitter/X, Instagram, or TikTok) that covers this news event. Provide its direct URL, identify its platform, and if it is a YouTube video, extract the video ID and construct the correct embed URL (e.g., https://www.youtube.com/embed/VIDEO_ID). If no relevant video exists, set platform to 'none' and other video fields to empty strings.
   `;
 
+  // Schema for content rewriting (strict JSON model constraint, no tools)
   const responseSchema = {
     type: 'OBJECT',
     properties: {
@@ -488,18 +544,9 @@ async function processArticleWithAI(title, originalContent, defaultCategory, isT
       content: { type: 'STRING', description: 'Fully rewritten news article body' },
       category: { type: 'STRING', enum: CATEGORIES, description: 'Category matching one of the allowed categories' },
       sentiment: { type: 'STRING', enum: ['positive', 'neutral', 'negative'], description: 'Overall article sentiment' },
-      readingTime: { type: 'INTEGER', description: 'Estimated read time in minutes' },
-      video: {
-        type: 'OBJECT',
-        properties: {
-          url: { type: 'STRING', description: 'URL of a relevant news video on YouTube, Twitter, Instagram, or TikTok. Return empty string if none found.' },
-          platform: { type: 'STRING', enum: ['youtube', 'twitter', 'instagram', 'tiktok', 'none'], description: 'Platform hosting the video' },
-          embedUrl: { type: 'STRING', description: 'Clean embed URL for iframe if platform is youtube (e.g. https://www.youtube.com/embed/VIDEO_ID) or if available. Return empty string if not applicable.' }
-        },
-        required: ['url', 'platform', 'embedUrl']
-      }
+      readingTime: { type: 'INTEGER', description: 'Estimated read time in minutes' }
     },
-    required: ['title', 'summary', 'content', 'category', 'sentiment', 'readingTime', 'video']
+    required: ['title', 'summary', 'content', 'category', 'sentiment', 'readingTime']
   };
 
   // Define models by priority and capacity
@@ -521,37 +568,52 @@ async function processArticleWithAI(title, originalContent, defaultCategory, isT
 
   const modelsToTry = isTrending ? trendingModels : standardModels;
   let lastError = null;
-  let responseText = "";
 
   for (const modelName of modelsToTry) {
     try {
       console.log(`   [AI Model] Querying model: ${modelName} (Trending: ${isTrending})...`);
+      
+      // Step 1: Strict JSON Schema content rewrite (No search tool conflicts)
       const response = await ai.models.generateContent({
         model: modelName,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
-          responseSchema: responseSchema,
-          tools: [{ googleSearch: {} }]
+          responseSchema: responseSchema
         }
       });
       
-      responseText = response.text;
+      const responseText = response.text;
+      const parsedContent = JSON.parse(responseText);
+      
+      // Step 2: Grounded Google Search video lookups (using search tool, no schema conflicts)
+      let videoObj = { url: "", platform: "none", embedUrl: "" };
+      try {
+        videoObj = await findVideoForArticle(parsedContent.title || title, modelName);
+      } catch (videoErr) {
+        console.warn(`   ⚠️ Video search failed on model ${modelName}:`, videoErr.message);
+      }
+
+      const mergedResult = {
+        ...parsedContent,
+        video: videoObj
+      };
+
       lastError = null; // Reset error on success
-      break;
+      return mergedResult;
     } catch (err) {
       lastError = err;
       const errStr = err.message || "";
       const isQuotaError = errStr.includes('429') || errStr.toLowerCase().includes('quota') || errStr.includes('RESOURCE_EXHAUSTED');
       
-      console.warn(`   ⚠️ Model ${modelName} failed to generate content: ${errStr}`);
+      console.warn(`   ⚠️ Model ${modelName} failed to process: ${errStr}`);
       
       if (isQuotaError) {
         console.warn(`   ⚠️ Model ${modelName} hit quota limit. Retrying with next available model...`);
         // Wait a short bit before retrying
         await new Promise(resolve => setTimeout(resolve, 1500));
       } else {
-        // Wait a small delay for other non-quota errors (like 404, etc.)
+        // Wait a small delay for other non-quota errors
         await new Promise(resolve => setTimeout(resolve, 500));
       }
       continue;
@@ -562,8 +624,6 @@ async function processArticleWithAI(title, originalContent, defaultCategory, isT
     console.error(`❌ All models failed to process article: ${lastError.message}`);
     throw lastError;
   }
-
-  return JSON.parse(responseText);
 }
 
 // Save article to Firestore or dry-run file
