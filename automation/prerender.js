@@ -89,8 +89,9 @@ async function runPrerender() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${cleanTitle} | PulseAI News</title>
-  <meta name="description" content="${cleanSummary}">
+  <title>\${cleanTitle} | PulseAI News</title>
+  <meta name="description" content="\${cleanSummary}">
+  <link rel="canonical" href="https://news-b5c94.web.app/article/\${articleId}">
   
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="article">

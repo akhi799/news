@@ -179,19 +179,24 @@ async function fetchGoogleTrends() {
 
 // Helper: Check if article overlaps with trending keywords
 function checkIsTrending(title, keywords) {
-  if (!keywords || keywords.length === 0 || !title) return false;
+  return !!getMatchingKeyword(title, keywords);
+}
+
+// Helper: Extract matching keyword phrase
+function getMatchingKeyword(title, keywords) {
+  if (!keywords || keywords.length === 0 || !title) return null;
   const combinedText = title.toLowerCase();
   
-  return keywords.some(keyword => {
-    if (combinedText.includes(keyword)) return true;
+  for (const keyword of keywords) {
+    if (combinedText.includes(keyword)) return keyword;
     
     // Check if individual words of keyword (longer than 3 chars) all match
     const keywordWords = keyword.split(/\s+/).filter(w => w.length > 3);
-    if (keywordWords.length > 0) {
-      return keywordWords.every(word => combinedText.includes(word));
+    if (keywordWords.length > 0 && keywordWords.every(word => combinedText.includes(word))) {
+      return keyword;
     }
-    return false;
-  });
+  }
+  return null;
 }
 
 // Helper: Cleanup Firestore documents older than 30 days
@@ -425,7 +430,7 @@ async function isArticleProcessed(url) {
 }
 
 // Call Gemini to process and rewrite the article (uses model fallback & purpose-specific selection)
-async function processArticleWithAI(title, originalContent, defaultCategory, isTrending = false) {
+async function processArticleWithAI(title, originalContent, defaultCategory, isTrending = false, matchedKeyword = null) {
   if (!ai) {
     // Simulated AI response for testing when API key is missing
     console.log(`🤖 [Simulated AI] Rewriting: "${title}"`);
@@ -444,8 +449,20 @@ async function processArticleWithAI(title, originalContent, defaultCategory, isT
     };
   }
 
+  let seoInstruction = "";
+  if (matchedKeyword) {
+    seoInstruction = `
+    SEO KEYWORD OPTIMIZATION INSTRUCTION:
+    This news event matches the trending search keyword/topic: "${matchedKeyword}".
+    You MUST naturally integrate the exact phrase "${matchedKeyword}" (or highly relevant search query variants) into the rewritten headline (title), the summary description, and the body text.
+    Ensure the keyword integration flows naturally in a high-quality journalistic format. This helps search crawlers identify this page as highly relevant to searchers querying "${matchedKeyword}".
+    `;
+  }
+
   const prompt = `
-    You are a professional, objective senior news editor for an online publishing company.
+    You are an expert news editor. You are given a raw news article's title and its full body content.
+    ${seoInstruction}
+    
     Below is an article scraped from the web:
     Original Title: "${title}"
     Original Content:
@@ -643,9 +660,10 @@ async function run() {
           continue; // skip already indexed
         }
 
-        const isTrending = checkIsTrending(item.title, trendingKeywords);
+        const matchedKeyword = getMatchingKeyword(item.title, trendingKeywords);
+        const isTrending = !!matchedKeyword;
         if (isTrending) {
-          console.log(`🔥 Article matched trending keyword: "${item.title}"`);
+          console.log(`🔥 Article matched trending keyword "${matchedKeyword}": "${item.title}"`);
         }
         
         newArticles.push({
@@ -655,7 +673,8 @@ async function run() {
           defaultCategory: feed.category,
           pubDate: pubDate,
           rawItem: item,
-          isTrending: isTrending
+          isTrending: isTrending,
+          matchedKeyword: matchedKeyword || null
         });
       }
     } catch (error) {
@@ -753,7 +772,8 @@ async function run() {
         candidate.originalTitle,
         articleText,
         candidate.defaultCategory,
-        candidate.isTrending
+        candidate.isTrending,
+        candidate.matchedKeyword
       );
       
       // 4. Save to Firestore (or local file)
