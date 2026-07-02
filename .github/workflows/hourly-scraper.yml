@@ -39,7 +39,7 @@ jobs:
           npm run scraper
           
           # 2. Prerender articles, build client, and deploy hosting to Firebase
-          npm run deploy
+          npm run deploy:hosting
           
           # Clean up credentials file
           node -e "require('fs').unlinkSync('service-account-temp.json')"
